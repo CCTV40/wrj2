@@ -2,14 +2,14 @@ import streamlit as st
 import gcoord
 from datetime import datetime
 
-# 页面配置（必须放在最开头，解决90%渲染问题）
+# 页面配置（必须放在最开头）
 st.set_page_config(
     page_title="无人机航线规划系统",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 全局状态管理（Streamlit 原生，无 DOM 冲突）
+# 全局状态
 if "drone_data" not in st.session_state:
     st.session_state.drone_data = {
         "point_a": {"lat": 32.2322, "lng": 118.749, "set": False},
@@ -18,33 +18,31 @@ if "drone_data" not in st.session_state:
         "heartbeat": []
     }
 
-# 侧边栏导航（原生组件，无 JS 冲突）
+# 侧边栏
 with st.sidebar:
     st.title("无人机系统")
     page = st.radio("功能页面", ["航线规划", "飞行监控"], key="page")
     st.divider()
-    # 坐标系设置
+
     st.subheader("坐标系设置")
     coord_system = st.radio("输入坐标系", ["GCJ-02(高德/百度)", "WGS-84"], index=0, key="coord")
     st.divider()
-    # 系统状态
+
     st.subheader("系统状态")
     st.write(f"A点已设：{'✅' if st.session_state.drone_data['point_a']['set'] else '❌'}")
     st.write(f"B点已设：{'✅' if st.session_state.drone_data['point_b']['set'] else '❌'}")
 
-# ====================== 航线规划页面 ======================
+# ====================== 航线规划 ======================
 if page == "航线规划":
     st.title("🗺️ 航线规划")
     st.divider()
 
-    # A/B 点设置（原生输入框，无 JS）
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("起点A")
         a_lat = st.number_input("纬度", value=st.session_state.drone_data["point_a"]["lat"], format="%.6f", key="a_lat")
         a_lng = st.number_input("经度", value=st.session_state.drone_data["point_a"]["lng"], format="%.6f", key="a_lng")
         if st.button("设置A点", type="primary", key="set_a"):
-            # 坐标转换（纯 Python，无 DOM 操作）
             lat, lng = a_lat, a_lng
             if coord_system == "WGS-84":
                 lng, lat = gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02)
@@ -56,7 +54,6 @@ if page == "航线规划":
         b_lat = st.number_input("纬度", value=st.session_state.drone_data["point_b"]["lat"], format="%.6f", key="b_lat")
         b_lng = st.number_input("经度", value=st.session_state.drone_data["point_b"]["lng"], format="%.6f", key="b_lng")
         if st.button("设置B点", type="primary", key="set_b"):
-            # 坐标转换（纯 Python，无 DOM 操作）
             lat, lng = b_lat, b_lng
             if coord_system == "WGS-84":
                 lng, lat = gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02)
@@ -64,13 +61,11 @@ if page == "航线规划":
             st.success("✅ B点设置成功！")
 
     st.divider()
-    # 飞行高度设置（原生滑块，无 JS）
     st.subheader("飞行参数")
-    height = st.slider("设定飞行高度(m)", min_value=10, max_value=200, value=st.session_state.drone_data["height"], key="height")
+    height = st.slider("设定飞行高度(m)", 10, 200, st.session_state.drone_data["height"], key="height")
     st.session_state.drone_data["height"] = height
     st.info(f"当前设定高度：{height}m")
 
-    # 航线信息展示（纯文本，无 JS）
     st.divider()
     st.subheader("当前航线信息")
     st.json({
@@ -79,12 +74,12 @@ if page == "航线规划":
         "飞行高度": st.session_state.drone_data["height"]
     })
 
-# ====================== 飞行监控页面 ======================
+# ====================== 飞行监控 ======================
 if page == "飞行监控":
     st.title("✈️ 飞行监控（心跳包）")
     st.divider()
 
-    # 模拟心跳包上传（纯 Python，无 JS）
+    # 上传心跳
     if st.button("上传测试心跳包", type="primary", key="upload_heartbeat"):
         heartbeat = {
             "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -94,20 +89,20 @@ if page == "飞行监控":
             "状态": "正常"
         }
         st.session_state.drone_data["heartbeat"].append(heartbeat)
-        # 最多保留100条
         if len(st.session_state.drone_data["heartbeat"]) > 100:
             st.session_state.drone_data["heartbeat"] = st.session_state.drone_data["heartbeat"][-100:]
         st.success("✅ 测试心跳包上传成功！")
 
     st.divider()
-    # 心跳包历史（原生表格，无 JS）
     st.subheader("心跳包历史数据")
+
     if st.session_state.drone_data["heartbeat"]:
         st.dataframe(st.session_state.drone_data["heartbeat"], use_container_width=True)
     else:
         st.info("暂无心跳包数据")
 
-    # 清空数据（原生按钮，无 JS）
+    # 清空数据（去掉 st.rerun() 就不报错了）
     if st.button("清空历史数据", type="secondary", key="clear"):
         st.session_state.drone_data["heartbeat"] = []
-        st.rerun()
+        # 这里删掉 st.rerun()
+        st.success("✅ 已清空历史数据")
