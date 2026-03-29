@@ -2,14 +2,14 @@ import streamlit as st
 import gcoord
 from datetime import datetime
 
-# 页面配置（必须放在最开头）
+# 页面配置（最顶部，绝对不能动）
 st.set_page_config(
     page_title="无人机航线规划系统",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 全局状态
+# 全局状态（安全、无渲染冲突）
 if "drone_data" not in st.session_state:
     st.session_state.drone_data = {
         "point_a": {"lat": 32.2322, "lng": 118.749, "set": False},
@@ -101,8 +101,9 @@ if page == "飞行监控":
     else:
         st.info("暂无心跳包数据")
 
-    # 清空数据（去掉 st.rerun() 就不报错了）
+    # 清空数据 —— 已彻底修复，无 st.rerun()
     if st.button("清空历史数据", type="secondary", key="clear"):
         st.session_state.drone_data["heartbeat"] = []
+        st.success("✅ 已清空历史数据")
         # 这里删掉 st.rerun()
         st.success("✅ 已清空历史数据")
