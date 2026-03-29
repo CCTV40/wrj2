@@ -1,63 +1,77 @@
-import numpy as np
-import control as ct
-import matplotlib.pyplot as plt
-import matplotlib
-import streamlit as st
+from flask import Flask, render_template, request, jsonify
+import gcoord  # 坐标转换
 
-# --------------------------
-# 配置中文字体显示
-# --------------------------
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']  # 用来正常显示中文标签
-plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+app = Flask(__name__)
 
-# --------------------------
-# 系统定义：质量-弹簧-阻尼系统
-# --------------------------
-# m*x'' + c*x' + k*x = u
-m = 1.0   # 质量
-c = 0.5   # 阻尼系数
-k = 2.0   # 弹簧系数
+# 全局存储无人机数据（实际项目用数据库）
+drone_data = {
+    "point_a": {"lat": 0, "lng": 0, "set": False},
+    "point_b": {"lat": 0, "lng": 0, "set": False},
+    "height": 50,
+    "heartbeat": []
+}
 
-# 状态空间表示：x = [位置, 速度]^T
-A = np.array([[0, 1],
-              [-k/m, -c/m]])
-B = np.array([[0],
-              [1/m]])
-C = np.array([[1, 0]])  # 只输出位置
-D = np.array([[0]])
+# ------------------- 页面路由 -------------------
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-# 创建系统
-sys = ct.ss(A, B, C, D)
+@app.route('/route-plan')
+def route_plan():
+    return render_template('route_plan.html')
 
-# --------------------------
-# Streamlit 界面与可视化
-# --------------------------
-st.title("无人机新那条检测可视化")
-st.subheader("质量-弹簧-阻尼系统响应")
+@app.route('/flight-monitor')
+def flight_monitor():
+    return render_template('flight_monitor.html')
 
-# 生成阶跃响应
-t = np.linspace(0, 10, 1000)
-t_step, y_step = ct.step_response(sys, T=t)
+# ------------------- 航线规划接口 -------------------
+@app.route('/api/set-point', methods=['POST'])
+def set_point():
+    data = request.json
+    point_type = data.get('type')  # 'A' 或 'B'
+    lat = float(data.get('lat'))
+    lng = float(data.get('lng'))
+    coord_from = data.get('coordSystem', 'GCJ02')
 
-# 绘图
-fig, ax = plt.subplots(figsize=(8, 4))
-ax.plot(t_step, y_step, label='阶跃响应')
-ax.set_xlabel('时间 (s)')
-ax.set_ylabel('位置')
-ax.set_title('系统阶跃响应曲线')
-ax.grid(True)
-ax.legend()
+    # 坐标转换：统一转成 GCJ02（国内地图标准）
+    if coord_from == "WGS84":
+        lng, lat = gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02)
 
-# 在 Streamlit 中显示
-st.pyplot(fig)
+    if point_type == "A":
+        drone_data["point_a"] = {"lat": lat, "lng": lng, "set": True}
+    elif point_type == "B":
+        drone_data["point_b"] = {"lat": lat, "lng": lng, "set": True}
 
-# 显示系统矩阵
-st.subheader("系统状态空间矩阵")
-st.write("A 矩阵：")
-st.write(A)
-st.write("B 矩阵：")
-st.write(B)
-st.write("C 矩阵：")
-st.write(C)
-st.write("D 矩阵：")
-st.write(D)
+    return jsonify({"code": 200, "msg": "设置成功"})
+
+@app.route('/api/set-height', methods=['POST'])
+def set_height():
+    height = request.json.get('height', 50)
+    drone_data["height"] = height
+    return jsonify({"code": 200, "msg": "高度设置成功"})
+
+@app.route('/api/get-route-info', methods=['GET'])
+def get_route_info():
+    return jsonify({
+        "pointA": drone_data["point_a"],
+        "pointB": drone_data["point_b"],
+        "height": drone_data["height"]
+    })
+
+# ------------------- 飞行监控（心跳包） -------------------
+@app.route('/api/upload-heartbeat', methods=['POST'])
+def upload_heartbeat():
+    data = request.json
+    drone_data["heartbeat"].append(data)
+    # 最多存100条
+    if len(drone_data["heartbeat"]) > 100:
+        drone_data["heartbeat"] = drone_data["heartbeat"][-100:]
+    return jsonify({"code": 200, "msg": "上传成功"})
+
+@app.route('/api/get-heartbeat', methods=['GET'])
+def get_heartbeat():
+    return jsonify(drone_data["heartbeat"])
+
+# ------------------- 启动 -------------------
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
