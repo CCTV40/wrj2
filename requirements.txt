@@ -1,4 +1,2 @@
-control
-numpy
-matplotlib
-streamlit
+flask
+gcoord
